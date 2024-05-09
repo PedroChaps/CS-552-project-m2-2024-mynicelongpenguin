@@ -38,11 +38,14 @@
       "_type": "Value"
     },
     "choices": {
-      "dtype": "null",
-      "_type": "Value"
+      "feature": {
+        "dtype": "string",
+        "_type": "Value"
+      },
+      "_type": "Sequence"
     },
     "correct_choice": {
-      "dtype": "null",
+      "dtype": "int64",
       "_type": "Value"
     },
     "topic": {
