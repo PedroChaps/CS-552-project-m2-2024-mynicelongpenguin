@@ -1,0 +1,57 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "theorem_qa",
+  "dataset_size": 5029517,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/TIGER-Lab/TheoremQA@9b782146281caae87b12c792318b7cfc030ac604/data/test-00000-of-00001.parquet": {
+      "num_bytes": 4949475,
+      "checksum": null
+    }
+  },
+  "download_size": 4949475,
+  "features": {
+    "question": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "answer": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "choices": {
+      "feature": {
+        "dtype": "string",
+        "_type": "Value"
+      },
+      "_type": "Sequence"
+    },
+    "correct_choice": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "topic": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 9978992,
+  "splits": {
+    "test": {
+      "name": "test",
+      "num_bytes": 5029517,
+      "num_examples": 800,
+      "dataset_name": "theorem_qa"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}
