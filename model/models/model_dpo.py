@@ -203,7 +203,8 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
         ###############################################################
         # TODO: Please implement your customized forward pass here
         # =============================================================
-        raise NotImplementedError
+        output_dict = self.pretrained_model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True, **kwargs)
+
         ###############################################################
 
         return output_dict
@@ -230,11 +231,15 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
             rejected_logps (`torch.FloatTensor`):
                 Log probabilities of the rejected responses. Shape: (batch_size,)
         """
-        ###############################################################
-        # TODO: Please implement your customized logprob computation here
-        # =============================================================
+
+        #return if they already in thr batch TODO: see if this is what we want
+        if "chosen_logps" in batch and "rejected_logps" in batch:
+            return batch["chosen_logps"], batch["rejected_logps"]
+        
+        # tokenize the input data
+        #TODO: calculate prob logs
+        
         raise NotImplementedError
-        ###############################################################
 
         return chosen_logps, rejected_logps
 
@@ -272,7 +277,18 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
         # ======================================================================
         # You need to return one reward score for each chosen and rejected response.
         # ======================================================================
-        raise NotImplementedError
+
+        # See Notion on how to compute the rewards
+        # define beta
+        #TODO: are we supposed to use the same beta we used for training or can we consider beta = 1 and just remove it (we only use this value to compare it with the reference model, so beta does not make a difference)
+        # valid because we will use DPOTrainer and not this function to train the model
+        beta = 1
+        chosen_rewards = beta * (policy_chosen_logps - reference_chosen_logps)
+        rejected_rewards = beta * (policy_rejected_logps - reference_rejected_logps)
+
+        output_dict["chosen_rewards"] = chosen_rewards.tolist()
+        output_dict["rejected_rewards"] = rejected_rewards.tolist()
+        
         ########################################################################
 
         return output_dict
