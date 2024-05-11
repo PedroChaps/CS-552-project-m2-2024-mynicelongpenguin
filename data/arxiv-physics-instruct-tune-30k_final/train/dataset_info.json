@@ -1,0 +1,54 @@
+{
+  "builder_name": "json",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "arxiv-physics-instruct-tune-30k",
+  "dataset_size": 21113244,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/ArtifactAI/arxiv-physics-instruct-tune-30k@c8a8692d11ca6ee8669e508f300999cbcb3b316b/arxiv_physics_instruct_30k.jsonl": {
+      "num_bytes": 21829218,
+      "checksum": null
+    }
+  },
+  "download_size": 21829218,
+  "features": {
+    "question": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "answer": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "choices": {
+      "dtype": "null",
+      "_type": "Value"
+    },
+    "correct_choice": {
+      "dtype": "null",
+      "_type": "Value"
+    },
+    "topic": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 42942462,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 21113244,
+      "num_examples": 30231,
+      "dataset_name": "arxiv-physics-instruct-tune-30k"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}
