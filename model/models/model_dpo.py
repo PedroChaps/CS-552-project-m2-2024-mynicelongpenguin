@@ -236,7 +236,45 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
         #return if they already in thr batch TODO: see if this is what we want
         if "chosen_logps" in batch and "rejected_logps" in batch:
             return batch["chosen_logps"], batch["rejected_logps"]
-        
+
+        def get_logprobs_pair(questions: list, answers: list):
+            """
+            Compute the log probabilities of the answers given the questions.
+
+            Args:
+                questions (`list`): A list of questions.
+                answers (`list`): A list of answers.
+            Returns:
+                logps (`torch.FloatTensor`): Log probabilities of the answers given the questions.
+            """
+            template = "Instruct: <question>\nOutput: "
+
+
+            #Replace the <question> tag with the question
+            strings = [template.replace("<question>", question) for question in questions]
+            # Get the length of the tokenized prompt
+            length_questions = [len(tokenizer.tokenize(string)) for string in strings]
+
+            # Add the answers
+            strings = [string + answer for string, answer in zip(strings, answers)]
+
+            tokenized_strings = tokenizer(strings, return_tensors="pt", padding=True, truncation=True)
+            input_ids = tokenized_strings.input_ids
+            attention_mask = tokenized_strings.attention_mask
+
+            with torch.no_grad():
+                logits = self.pretrained_model(input_ids, use_cache=False, attention_mask=attention_mask).logits
+            
+            
+            print(f"{logits.shape = }")
+            for i, logit in enumerate(logits):
+                #TODO: now, given the pad token id, we do not take that into account the pad tokens
+            
+            
+            # Get the log probabilities of the answers
+            
+            
+
         # # tokenize the input data
         # #TODO: calculate prob logs
         # template = "Instruct:<prompt>\nOutput:<answer>"
@@ -250,25 +288,25 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
         #change batch to be compatible with DPODataCollatorWithPadding
         assert len(batch["prompt"]) == len(batch["chosen"]) == len(batch["rejected"]) 
 
-        new_batch = [
-            {
-                "prompt": batch["prompt"][i],
-                "chosen": batch["chosen"][i],
-                "rejected": batch["rejected"][i]
-            }
-            for i in range(len(batch["prompt"]))
-        ]
+        # new_batch = [
+        #     {
+        #         "prompt": batch["prompt"][i],
+        #         "chosen": batch["chosen"][i],
+        #         "rejected": batch["rejected"][i]
+        #     }
+        #     for i in range(len(batch["prompt"]))
+        # ]
         
-        #TODO: check what we are supposed to use in label_pad_token_id
-        collator = DPODataCollatorWithPadding(
-            tokenizer=tokenizer,
-            model=self.pretrained_model,
-            label_pad_token_id=tokenizer.pad_token_id,
-        )
+        # #TODO: check what we are supposed to use in label_pad_token_id
+        # collator = DPODataCollatorWithPadding(
+        #     tokenizer=tokenizer,
+        #     model=self.pretrained_model,
+        #     label_pad_token_id=tokenizer.pad_token_id,
+        # )
 
-        padded_batch = collator(new_batch)        
+        # padded_batch = collator(new_batch)        
 
-        print(padded_batch)
+        # print(padded_batch)
 
         #TODO: complete
 
@@ -299,6 +337,7 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
         #     concatenated_batch["concatenated_labels"],
         #     label_pad_token_id=tokenizer.pad_token_id
         # )
+
 
 
 
@@ -353,8 +392,8 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
         # (we only use this value to compare it with the reference model, so beta does not make a difference)
         # valid because we will use DPOTrainer and not this function to train the model
         beta = 1
-        chosen_rewards = beta * (policy_chosen_logps - reference_chosen_logps)
-        rejected_rewards = beta * (policy_rejected_logps - reference_rejected_logps)
+        chosen_rewards = beta * (policy_chosen_logps - reference_chosen_logps).detach()
+        rejected_rewards = beta * (policy_rejected_logps - reference_rejected_logps).detach()
 
         output_dict["chosen_rewards"] = chosen_rewards.tolist()
         output_dict["rejected_rewards"] = rejected_rewards.tolist()
