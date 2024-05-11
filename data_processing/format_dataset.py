@@ -3,6 +3,7 @@ import re
 import random
 import pandas as pd
 import json
+from datasets import Dataset
 
 # dataset = load_from_disk("../data/theoremqa_justified_2")
 
@@ -118,7 +119,7 @@ def map_topics(course_id):
         raise ValueError(f"Unknown topic: {topic}")
 
 epfl_json = json.load(open("../data/M1_preference_data_07052024.json"))
-epfl = pd.DataFrame(columns=["question", "choices", "correct_choice", "topic", "answer"])
+epfl = pd.DataFrame(columns=["question", "choices", "correct_choice", "topic", "answer", "question_id"])
 
 for question_packed in epfl_json:
     question = question_packed["question_complete"]
@@ -127,13 +128,17 @@ for question_packed in epfl_json:
 
     for pref in preferences:
         chosen = pref["overall"]
+        if chosen not in ["A", "B"]:
+            continue
         answer = pref[chosen]
         entry = {
             "question": question,
             "choices": None,
             "correct_choice": None,
             "topic": topic,
-            "answer": answer
+            "answer": answer,
+            "question_id": question_packed["question_id"],
+            "course_id": question_packed["course_id"]
         }
 
 
@@ -141,6 +146,12 @@ for question_packed in epfl_json:
         epfl.loc[len(epfl)] = entry
     
 
-print(epfl.head())
+print(epfl.head(5))
 print(len(epfl))
 
+epfl_dataset = Dataset.from_pandas(epfl)
+
+epfl_dataset.remove_columns(["__index_level_0__"])
+
+
+epfl_dataset.save_to_disk("../data/epfl_all_formatted")

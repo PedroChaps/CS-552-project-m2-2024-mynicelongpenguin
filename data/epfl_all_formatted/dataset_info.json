@@ -21,6 +21,14 @@
     "answer": {
       "dtype": "string",
       "_type": "Value"
+    },
+    "question_id": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "__index_level_0__": {
+      "dtype": "int64",
+      "_type": "Value"
     }
   },
   "homepage": "",

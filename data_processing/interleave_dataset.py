@@ -7,22 +7,23 @@ import os
 platypus = load_from_disk("../data/open_platypus_justified_2")
 physics_arxiv = load_from_disk("../data/arxiv-physics-instruct-tune-30k-formatted")
 theoremqa = load_from_disk("../data/theoremqa_justified_formatted_2")
+mmlu = load_from_disk("../data/MMLU-STEM_processed")
 
 
 # Access the specific split for dataset2
 physics_arxiv = physics_arxiv['train']
 
-# %%
-platypus[0]
+# # %%
+# platypus[0]
 
-# %%
-dataset2_train[0]
+# # %%
+# dataset2_train[0]
 
-# %%
-theoremqa[0]
+# # %%
+# theoremqa[0]
 
-# %%
-datasets_list = [platypus, physics_arxiv, theoremqa]
+# # %%
+datasets_list = [platypus, physics_arxiv, theoremqa, mmlu]
 
 # %%
 dataset_probabilities = [0.5, 0.3, 0.2]
@@ -74,5 +75,3 @@ for i, probs in enumerate(dataset_probabilities):
 
     # Save each version to a different directory
     interleaved_dataset.save_to_disk(f"{base_save_path}variation_{i+1}")
-
-
