@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 from models.model_base import PreTrainedModelWrapper
+from tlr import DPOTrainer
 
 class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
     """
@@ -236,8 +237,76 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
         if "chosen_logps" in batch and "rejected_logps" in batch:
             return batch["chosen_logps"], batch["rejected_logps"]
         
-        # tokenize the input data
-        #TODO: calculate prob logs
+        # # tokenize the input data
+        # #TODO: calculate prob logs
+        # template = "Instruct:<prompt>\nOutput:<answer>"
+
+        # positive_strings = [template.replace("<prompt>", prompt).replace("<answer>", chosen) for prompt, chosen in zip(batch["prompt"], batch["chosen"])]
+        # negative_strings = [template.replace("<prompt>", prompt).replace("<answer>", rejected) for prompt, rejected in zip(batch["prompt"], batch["rejected"])]
+
+        # positive_input_ids = tokenizer(positive_strings, return_tensors="pt", padding=True, truncation=True).input_ids
+        # negative_input_ids = tokenizer(negative_strings, return_tensors="pt", padding=True, truncation=True).input_ids
+
+        #change batch to be compatible with DPODataCollatorWithPadding
+        assert len(batch["prompt"]) == len(batch["chosen"]) == len(batch["rejected"]) 
+
+        new_batch = [
+            {
+                "prompt": batch["prompt"][i],
+                "chosen": batch["chosen"][i],
+                "rejected": batch["rejected"][i]
+            }
+            for i in range(len(batch["prompt"]))
+        ]
+        
+        #TODO: check what we are supposed to use in label_pad_token_id
+        collator = DPODataCollatorWithPadding(
+            tokenizer=tokenizer,
+            model=self.pretrained_model,
+            label_pad_token_id=tokenizer.pad_token_id,
+        )
+
+        padded_batch = collator(new_batch)        
+
+        print(padded_batch)
+
+        #TODO: complete
+
+
+
+        # new_batch = {
+        #     "chosen_input_ids": positive_input_ids,
+        #     "rejected_input_ids": negative_input_ids
+        # }
+
+        # #TODO: check argument pad value
+        # concatenated_batch = DPOTrainer.concatenated_inputs( 
+        #     new_batch,
+        #     label_pad_token_id=tokenizer.pad_token_id,
+        #     device=positive_input_ids.device
+        # )
+
+        # len_chosen = batch
+
+        # all_logits = self.pretrained_model(
+        #     concatenated_batch["concatenated_input_ids"],
+        #     attention_mask=concatenated_batch["concatenated_attention_mask"],
+        #     use_cache=False
+        # ).logits
+
+        # all_logps = DPOTrainer.get_batch_logps(
+        #     all_logits,
+        #     concatenated_batch["concatenated_labels"],
+        #     label_pad_token_id=tokenizer.pad_token_id
+        # )
+
+
+
+
+
+
+        
+
         
         raise NotImplementedError
 
@@ -280,7 +349,8 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
 
         # See Notion on how to compute the rewards
         # define beta
-        #TODO: are we supposed to use the same beta we used for training or can we consider beta = 1 and just remove it (we only use this value to compare it with the reference model, so beta does not make a difference)
+        #TODO: are we supposed to use the same beta we used for training or can we consider beta = 1 and just remove it 
+        # (we only use this value to compare it with the reference model, so beta does not make a difference)
         # valid because we will use DPOTrainer and not this function to train the model
         beta = 1
         chosen_rewards = beta * (policy_chosen_logps - reference_chosen_logps)
@@ -322,6 +392,35 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
 
         return output_dict
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+######################################################################################################## NOT USED ########################################################################################################
 class AutoDPOModelForSeq2SeqLM(PreTrainedModelWrapper):
     r"""
     A seq2seq model with support for custom modules in addition to the transformer model.
@@ -413,7 +512,7 @@ class AutoDPOModelForSeq2SeqLM(PreTrainedModelWrapper):
         We add the state dictionary of the custom module to the state dictionary of the wrapped model
         by prepending the key with `custom_module.`. This function removes the `custom_module.` prefix from the
         keys of the custom module state dictionary.
-
+chosen_labels
         IMPORTANT: Make sure to replace `custom_module` with the name of your custom module class name.
         """
         if not hasattr(self, 'custom_module'):

@@ -1,8 +1,10 @@
-from datasets import load_from_disk
+from datasets import load_from_disk, load_dataset
 import re
 import random
+import pandas as pd
+import json
 
-dataset = load_from_disk("../data/theoremqa_justified_2")
+# dataset = load_from_disk("../data/theoremqa_justified_2")
 
 def question_specific_process(question_frags, idx):
     options = question_frags[1:]
@@ -68,5 +70,77 @@ def format_entry(entry, idx):
         # the assumption is that this dataset is 50 / 50 math / physics
     }
 
-new_dataset = dataset.map(format_entry, with_indices=True)
-new_dataset.save_to_disk("../data/theoremqa_justified_formatted")
+# new_dataset = dataset.map(format_entry, with_indices=True)
+# new_dataset.save_to_disk("../data/theoremqa_justified_formatted")
+
+
+
+### FORMAT EPFL DATA FOR SFT
+
+# epfl = load_dataset('json', data_files='../data/M1_preference_data_07052024.json')
+
+# print(epfl.column_names)
+
+# print(epfl)
+
+course_mapping = pd.read_csv("../data/course_id_topics.tsv", sep='\t')
+print(set(course_mapping["course_topics_finegrained"].to_list()))
+
+def map_topics(course_id):
+    topic = course_mapping.loc[course_mapping["course_id"] == course_id]
+    if (len(topic) == 0):
+        topic = random.choice(["math", "physics", "computer_science", "AI"])
+        return topic
+
+    topic = course_mapping.loc[course_mapping["course_id"] == course_id].iloc[0]["course_topics_finegrained"]
+
+    if "Physics" in topic:
+        return "physics"
+
+    if "Mathematics" in topic:
+        return "math"
+
+    
+    #might not be right
+    # elif topic == "Computer Software":
+    #     entry["topic"] = "code"
+    #     return entry 
+    
+    elif "Computer" in topic:
+        return "computer_science"
+    
+    elif "Artificial" in topic:
+        return "AI"
+    
+    else:
+        print(type(topic))
+        print(topic)
+        raise ValueError(f"Unknown topic: {topic}")
+
+epfl_json = json.load(open("../data/M1_preference_data_07052024.json"))
+epfl = pd.DataFrame(columns=["question", "choices", "correct_choice", "topic", "answer"])
+
+for question_packed in epfl_json:
+    question = question_packed["question_complete"]
+    preferences = question_packed["preference"]
+    topic = map_topics(question_packed["course_id"])
+
+    for pref in preferences:
+        chosen = pref["overall"]
+        answer = pref[chosen]
+        entry = {
+            "question": question,
+            "choices": None,
+            "correct_choice": None,
+            "topic": topic,
+            "answer": answer
+        }
+
+
+        # epfl.append(entry, ignore_index=True)
+        epfl.loc[len(epfl)] = entry
+    
+
+print(epfl.head())
+print(len(epfl))
+
