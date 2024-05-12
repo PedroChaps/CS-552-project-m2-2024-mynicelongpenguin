@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import time
 
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 from models.model_base import PreTrainedModelWrapper
-from tlr import DPOTrainer
+# from tlr import DPOTrainer
 
 class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
     """
@@ -44,6 +45,8 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
                 Additional keyword arguments, that are passed to any `CustomModule` class.
         """
         super().__init__(pretrained_model, **kwargs)
+
+        print("MODEL INIT")
 
         if not any(hasattr(self.pretrained_model, attribute) for attribute in self.lm_head_namings):
             raise ValueError("The model does not have a language model head, please use a model that has one.")
@@ -233,6 +236,11 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
                 Log probabilities of the rejected responses. Shape: (batch_size,)
         """
 
+        #ERROR because tokenizer does not have pad token, so define one
+        #TODO: what should I do?
+        tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+
         #return if they already in thr batch TODO: see if this is what we want
         if "chosen_logps" in batch and "rejected_logps" in batch:
             return batch["chosen_logps"], batch["rejected_logps"]
@@ -249,6 +257,7 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
             """
             template = "Instruct: <question>\nOutput: "
 
+            self.pretrained_model.to(torch.device("cuda"))
 
             #Replace the <question> tag with the question
             strings = [template.replace("<question>", question) for question in questions]
@@ -262,92 +271,46 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
             input_ids = tokenized_strings.input_ids
             attention_mask = tokenized_strings.attention_mask
 
+            input_ids = input_ids.to(self.pretrained_model.device)
+            attention_mask = attention_mask.to(self.pretrained_model.device)
+
+            start = time.time()
             with torch.no_grad():
-                logits = self.pretrained_model(input_ids, use_cache=False, attention_mask=attention_mask).logits
+                    logits = self.pretrained_model(input_ids, use_cache=False, attention_mask=attention_mask).logits
+
+            end = time.time() 
+            print("Time taken to run model inference: ", end - start)
             
-            
-            print(f"{logits.shape = }")
+
+            logps = []
             for i, logit in enumerate(logits):
-                #TODO: now, given the pad token id, we do not take that into account the pad tokens
+
+                # get the input tokens and logits of the answer (not the whole prompt + answer)
+                needed_input = input_ids[i][length_questions[i]:]
+                needed_logits = logit[length_questions[i]:]
+                needed_attention_mask = attention_mask[i][length_questions[i]:]
+
+                #calculate log softmax in the dimension of vocab_size
+                needed_logits = F.log_softmax(needed_logits, dim=1)
+
+                #use the token_ids to choose the log prob to choose from all of the logits
+                selected_logits = torch.gather(needed_logits, dim=1, index=needed_input.unsqueeze(1)).squeeze(1)
+
+                #put to 0 all of the logits where attention_mask is 1 (pad token)
+                masked_logits = torch.where(needed_attention_mask == 1, torch.tensor(0.0).to(self.pretrained_model.device), selected_logits)
+                
+                #sum the log probs
+                sum_logits_answer = torch.sum(masked_logits).item()
+
+                logps.append(sum_logits_answer) 
             
-            
-            # Get the log probabilities of the answers
-            
+            return torch.tensor(logps)
             
 
-        # # tokenize the input data
-        # #TODO: calculate prob logs
-        # template = "Instruct:<prompt>\nOutput:<answer>"
-
-        # positive_strings = [template.replace("<prompt>", prompt).replace("<answer>", chosen) for prompt, chosen in zip(batch["prompt"], batch["chosen"])]
-        # negative_strings = [template.replace("<prompt>", prompt).replace("<answer>", rejected) for prompt, rejected in zip(batch["prompt"], batch["rejected"])]
-
-        # positive_input_ids = tokenizer(positive_strings, return_tensors="pt", padding=True, truncation=True).input_ids
-        # negative_input_ids = tokenizer(negative_strings, return_tensors="pt", padding=True, truncation=True).input_ids
-
-        #change batch to be compatible with DPODataCollatorWithPadding
         assert len(batch["prompt"]) == len(batch["chosen"]) == len(batch["rejected"]) 
 
-        # new_batch = [
-        #     {
-        #         "prompt": batch["prompt"][i],
-        #         "chosen": batch["chosen"][i],
-        #         "rejected": batch["rejected"][i]
-        #     }
-        #     for i in range(len(batch["prompt"]))
-        # ]
-        
-        # #TODO: check what we are supposed to use in label_pad_token_id
-        # collator = DPODataCollatorWithPadding(
-        #     tokenizer=tokenizer,
-        #     model=self.pretrained_model,
-        #     label_pad_token_id=tokenizer.pad_token_id,
-        # )
-
-        # padded_batch = collator(new_batch)        
-
-        # print(padded_batch)
-
-        #TODO: complete
-
-
-
-        # new_batch = {
-        #     "chosen_input_ids": positive_input_ids,
-        #     "rejected_input_ids": negative_input_ids
-        # }
-
-        # #TODO: check argument pad value
-        # concatenated_batch = DPOTrainer.concatenated_inputs( 
-        #     new_batch,
-        #     label_pad_token_id=tokenizer.pad_token_id,
-        #     device=positive_input_ids.device
-        # )
-
-        # len_chosen = batch
-
-        # all_logits = self.pretrained_model(
-        #     concatenated_batch["concatenated_input_ids"],
-        #     attention_mask=concatenated_batch["concatenated_attention_mask"],
-        #     use_cache=False
-        # ).logits
-
-        # all_logps = DPOTrainer.get_batch_logps(
-        #     all_logits,
-        #     concatenated_batch["concatenated_labels"],
-        #     label_pad_token_id=tokenizer.pad_token_id
-        # )
-
-
-
-
-
-
-
-        
-
-        
-        raise NotImplementedError
+        chosen_logps = get_logprobs_pair(batch["prompt"], batch["chosen"])
+        rejected_logps = get_logprobs_pair(batch["prompt"], batch["rejected"])
 
         return chosen_logps, rejected_logps
 
