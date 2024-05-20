@@ -43,8 +43,8 @@ echo "Testing Peft Example ..."
 
 python3 ./train_sft/sft/train.py \
     --model_name_or_path "microsoft/phi-2" \
-    --dataset_name "train_sft/data/MMLU-STEM_final" \
-    --output_dir "outputs/THC-conf1" \
+    --dataset_name "train_sft/data/MMLU-STEM_final_fixedCorrectChoice" \
+    --output_dir "outputs/THC-conf1-PedroIsJustTesting" \
         --num_train_epochs 3 \
         --logging_steps 5 \
         --log_level "info" \
@@ -57,23 +57,23 @@ python3 ./train_sft/sft/train.py \
         --warmup_ratio 0.0 \
         --max_grad_norm 1.0 \
         --max_seq_len 64 \
-        --splits "train" \
+        --splits "train,test" \
         --per_device_train_batch_size 2 \
         --per_device_eval_batch_size 2 \
         --gradient_accumulation_steps 8 \
-        --dataset_text_field "content" \
+        --dataset_text_field "text" \
+        --use_flash_attn False \
     --seed 100 \
     --add_special_tokens False \
     --append_concat_token False \
     --use_reentrant True \
     --chat_template_format "none" \
-    
+        # --use_peft_lora True \
+        # --lora_r 8 \
+        # --lora_alpha 16 \
+        # --lora_dropout 0.1 \
+        # --lora_target_modules "all-linear" \
     # For LoRA
-    # --use_peft_lora True \
-    # --lora_r 8 \
-    # --lora_alpha 16 \
-    # --lora_dropout 0.1 \
-    #--lora_target_modules "all-linear" \
     
 
 echo "Test complete on $(hostname)"

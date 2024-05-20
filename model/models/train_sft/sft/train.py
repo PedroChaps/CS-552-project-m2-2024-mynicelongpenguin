@@ -6,11 +6,12 @@ from typing import Optional
 from transformers import HfArgumentParser, TrainingArguments, set_seed
 from trl import SFTTrainer
 from utils import create_and_prepare_model, create_datasets
+from accelerate import Accelerator
 
 
 def dprint(*args, **kwargs):
     if True:
-        print(*args, **kwargs)
+        print("[DEBUG train.py]", *args, **kwargs)
 
 
 # Define and parse arguments.
@@ -105,12 +106,20 @@ class DataTrainingArguments:
 
 
 def main(model_args, data_args, training_args):
+    
+    dprint("Banana")
+    acceletator = Accelerator()
+    dprint("Queijo")
+    
     # Set seed for reproducibility
     set_seed(training_args.seed)
 
     # model
     model, peft_config, tokenizer = create_and_prepare_model(model_args, data_args, training_args)
-
+    
+    dprint(f"Ola")
+    model = acceletator.prepare(model)
+    dprint(f"Adeus")
     # gradient ckpt
     model.config.use_cache = not training_args.gradient_checkpointing
     training_args.gradient_checkpointing = training_args.gradient_checkpointing and not model_args.use_unsloth
@@ -149,7 +158,9 @@ def main(model_args, data_args, training_args):
         max_seq_length=data_args.max_seq_length,
     )
     trainer.accelerator.print(f"{trainer.model}")
-    trainer.model.print_trainable_parameters()
+    
+    if model_args.use_peft_lora:
+        trainer.model.print_trainable_parameters()
 
     # train
     checkpoint = None

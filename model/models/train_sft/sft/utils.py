@@ -12,6 +12,9 @@ from transformers import (
 
 from peft import LoraConfig
 
+def dprint(*args, **kwargs):
+    if True:
+        print("[DEBUG utils.py]", *args, **kwargs)
 
 DEFAULT_CHATML_CHAT_TEMPLATE = "{% for message in messages %}\n{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}{% if loop.last and add_generation_prompt %}{{'<|im_start|>assistant\n' }}{% endif %}{% endfor %}"
 DEFAULT_ZEPHYR_CHAT_TEMPLATE = "{% for message in messages %}\n{% if message['role'] == 'user' %}\n{{ '<|user|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'system' %}\n{{ '<|system|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'assistant' %}\n{{ '<|assistant|>\n'  + message['content'] + eos_token }}\n{% endif %}\n{% if loop.last and add_generation_prompt %}\n{{ '<|assistant|>' }}\n{% endif %}\n{% endfor %}"
@@ -43,6 +46,49 @@ class ChatmlSpecialTokens(str, Enum):
         return [c.value for c in cls]
 
 
+def collate_row(row):
+    
+    question = row["question"]
+    answer = row["answer"]
+    choices = row["choices"]
+    correct_choice = row["correct_choice"]
+    
+    if choices in [None, "", "none", "None", "null", "Null"]:
+        prompt = f'''\
+            ### Question:
+            {question}
+
+
+            ### Answer:
+            {answer}
+        '''
+    
+    
+    else:
+        prompt = f'''\
+            ### Question:
+            {question}
+
+
+            ### Choices:
+            {f"{chr(10)}".join(f"{chr(ord('A') + i)}: {choice}" for i, choice in enumerate(choices))}
+
+
+            ### Explanation:
+            {answer}
+            
+            
+            ### Correct Choice:
+            {chr(ord('A') + correct_choice)}
+        '''
+    
+    # Removes the leading whitespaces because of the tabs in the triple quoted strings
+    prompt = '\n'.join([m.lstrip() for m in prompt.split('\n')])
+    
+    return {"text": prompt}
+
+
+
 def create_datasets(tokenizer, data_args, training_args, apply_chat_template=False):
     def preprocess(samples):
         batch = []
@@ -53,11 +99,13 @@ def create_datasets(tokenizer, data_args, training_args, apply_chat_template=Fal
     raw_datasets = DatasetDict()
     for split in data_args.splits.split(","):
         try:
-            # Try first if dataset on a Hub repo
-            dataset = load_dataset(data_args.dataset_name, split=split)
-        except DatasetGenerationError:
-            # If not, check local dataset
+            # Try first local dataset
             dataset = load_from_disk(os.path.join(data_args.dataset_name, split))
+            dprint(f"loaded dataset from disk: {os.path.join(data_args.dataset_name, split)}")
+        except FileNotFoundError:
+            #  If not, check dataset on a Hub repo
+            dataset = load_dataset(data_args.dataset_name, split=split)
+            dprint(f"loaded dataset from hub: {data_args.dataset_name = } {split = }")
 
         if "train" in split:
             raw_datasets["train"] = dataset
@@ -72,6 +120,9 @@ def create_datasets(tokenizer, data_args, training_args, apply_chat_template=Fal
             batched=True,
             remove_columns=raw_datasets["train"].column_names,
         )
+
+    # apply collate function
+    raw_datasets = raw_datasets.map(collate_row)
 
     train_data, valid_data = None, None
     if "train" in raw_datasets:
@@ -176,7 +227,9 @@ def create_and_prepare_model(args, data_args, training_args):
         # make embedding resizing configurable?
         model.resize_token_embeddings(len(tokenizer), pad_to_multiple_of=8)
     else:
-        tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=True)
+        # Pedro: Hardcoded the model name for now, since the "base model" will always be the same (PHI-2) and we don't have tokenizers for other updated models
+        # tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained("microsoft/phi-2", trust_remote_code=True)
         tokenizer.pad_token = tokenizer.eos_token
 
     if args.use_unsloth:
