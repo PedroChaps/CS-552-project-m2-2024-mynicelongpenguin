@@ -33,7 +33,7 @@ def format_epfl_preference_pairs(input_file, output_file):
 
 
 if __name__ == '__main__':
-    input_path = '../data/M1_preference_data_07052024.json'
+    input_path = '../data/M1_preference_data_15052024.json'
     output_path = '../data/dpo_formatted_epfl_preference_data.jsonl'
     
     # Call the function to format the data
