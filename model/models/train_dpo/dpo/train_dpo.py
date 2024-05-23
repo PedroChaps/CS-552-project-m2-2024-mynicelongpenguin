@@ -34,6 +34,8 @@ dataset_name = f"/scratch/izar/{username}/project-m2-2024-mynicelongpenguin/mode
 
 seed = 42
 resume_from_checkpoint = None #set to the path of the checkpoint to resume training from
+
+output_dir = "outputs/try3"
 ##################################################################
 
 
@@ -106,7 +108,7 @@ def load_model():
 def main():
     
     # Set seed for reproducibility
-    set_seed(42)
+    set_seed(seed)
 
     # model
     model, tokenizer, peft_config = load_model()
@@ -127,7 +129,7 @@ def main():
         max_prompt_length=1024,
         max_target_length=1024,
         precompute_ref_log_probs=True,
-        output_dir="outputs/try2",
+        output_dir=output_dir,
         num_train_epochs=3,
         logging_steps=5,
         log_level="info",
