@@ -6,3 +6,4 @@ accelerate
 numpy
 scikit-learn
 huggingface-hub
+tensorboard
