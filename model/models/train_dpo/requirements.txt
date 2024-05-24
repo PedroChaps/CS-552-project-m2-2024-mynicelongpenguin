@@ -3,3 +3,6 @@ datasets
 evaluate
 peft
 accelerate
+numpy
+scikit-learn
+huggingface-hub

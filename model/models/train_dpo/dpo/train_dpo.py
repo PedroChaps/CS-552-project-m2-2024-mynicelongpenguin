@@ -30,12 +30,15 @@ username = "aloureir"
 model_name = "rhysjones/phi-2-orange-v2"
 new_model_name = "MNLP_try"
 
-dataset_name = f"/scratch/izar/{username}/project-m2-2024-mynicelongpenguin/model/datasets/dpo_preference_example.jsonl"
+dataset_name = f"/scratch/izar/{username}/project-m2-2024-mynicelongpenguin/data/combined_30k_train.jsonl"
 
 seed = 42
 resume_from_checkpoint = None #set to the path of the checkpoint to resume training from
 
-output_dir = "outputs/try3"
+output_dir = "outputs/combined_30k_model"
+push_to_hub = False #set True to push the model to the hub at the end of training
+commit_message = None #commit message
+repo_id = "TeachersHateChatbots"
 ##################################################################
 
 
@@ -52,13 +55,16 @@ def create_datasets(tokenizer):
             chosen = {"role": "assistant", "content": samples["chosen"][i]}
             rejected = {"role": "assistant", "content": samples["rejected"][i]}
 
-            prompts.append(tokenizer.apply_chat_template(conversation, tokenize=False))
-            chosens.append(tokenizer.apply_chat_template([chosen], tokenize=False))
-            rejecteds.append(tokenizer.apply_chat_template([rejected], tokenize=False))
-            
+            prompts.append(tokenizer.apply_chat_template(conversation, tokenize=False, add_generation_prompt=False))
+            chosens.append(tokenizer.apply_chat_template([chosen], tokenize=False, add_generation_prompt=False))
+            rejecteds.append(tokenizer.apply_chat_template([rejected], tokenize=False, add_generation_prompt=False))
+
         return {"prompt": prompts, "chosen": chosens, "rejected": rejecteds}
 
     dataset = load_dataset("json", data_files=dataset_name, split="train")
+
+    dataset = dataset.shuffle().select(range(1500))
+
     dataset = dataset.train_test_split(test_size=0.1)
 
     train_dataset = dataset["train"]
@@ -120,7 +126,6 @@ def main():
     train_dataset, test_dataset = create_datasets(tokenizer)
 
     print(f"{train_dataset[0] = }")
-
     training_args = DPOConfig(
         beta=0.1,
         label_pad_token_id=tokenizer.pad_token_id,
@@ -146,6 +151,7 @@ def main():
         per_device_eval_batch_size=4,
         gradient_accumulation_steps=2,
         gradient_checkpointing=True,
+        report_to="tensorboard",
         gradient_checkpointing_kwargs={"use_reentrant": True},
     )
 
@@ -171,8 +177,12 @@ def main():
     trainer.train(resume_from_checkpoint=resume_from_checkpoint)
     trainer.save_model()
 
+    if push_to_hub:
+        trainer.model.push_to_hub(commit_message=commit_message, repo_id=repo_id)
+
 
 if __name__ == "__main__":
+    print(dataset_name)
     start = time.time()
     main()
     end = time.time()
