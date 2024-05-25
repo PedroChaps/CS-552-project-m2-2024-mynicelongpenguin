@@ -16,6 +16,7 @@ from transformers import (
 )
 
 from peft import LoraConfig
+import argparse
 
 
 ##################################################################
@@ -25,24 +26,23 @@ def dprint(*args, **kwargs):
         print("[DEBUG train2.py]", *args, **kwargs)
 ##################################################################
 # SOME PARAMETERS (may adjust in the code as well)
-username = "aloureir"
+# username = "aloureir"
 
-model_name = "rhysjones/phi-2-orange-v2"
-new_model_name = "MNLP_try"
+# model_name = "rhysjones/phi-2-orange-v2"
 
-dataset_name = f"/scratch/izar/{username}/project-m2-2024-mynicelongpenguin/data/combined_30k_train.jsonl"
+# dataset_name = f"/scratch/izar/{username}/project-m2-2024-mynicelongpenguin/data/combined_40k_train.jsonl"
 
-seed = 42
-resume_from_checkpoint = None #set to the path of the checkpoint to resume training from
+# seed = 42
+# resume_from_checkpoint = None #set to the path of the checkpoint to resume training from
 
-output_dir = "outputs/combined_30k_model"
+# output_dir = "outputs/chosen_model"
 push_to_hub = False #set True to push the model to the hub at the end of training
 commit_message = None #commit message
 repo_id = "TeachersHateChatbots"
 ##################################################################
 
 
-def create_datasets(tokenizer):
+def create_datasets(args, tokenizer):
     def apply_template(samples):
         system = {"role": "system", "content": "You are a helpful EPFL chatbot."}
         prompts = []
@@ -61,9 +61,11 @@ def create_datasets(tokenizer):
 
         return {"prompt": prompts, "chosen": chosens, "rejected": rejecteds}
 
-    dataset = load_dataset("json", data_files=dataset_name, split="train")
+    dataset = load_dataset("json", data_files=args.dataset_name, split="train")
 
-    dataset = dataset.shuffle().select(range(1500))
+
+    if args.sample_quantity:
+        dataset = dataset.shuffle(seed=args.seed).select(range(args.sample_quantity))
 
     dataset = dataset.train_test_split(test_size=0.1)
 
@@ -75,9 +77,9 @@ def create_datasets(tokenizer):
 
     return train_dataset, test_dataset
 
-def load_model():
+def load_model(args):
         model = AutoModelForCausalLM.from_pretrained(
-            model_name,
+            args.model_name,
             # quantization_config=bnb_config,
             trust_remote_code=True,
             # torch_dtype=torch.fp32,
@@ -89,7 +91,7 @@ def load_model():
         # special_tokens = ChatmlSpecialTokens
         # chat_template = DEFAULT_CHATML_CHAT_TEMPLATE
 
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
         
         dprint(tokenizer.pad_token)
         dprint(tokenizer.eos_token)
@@ -100,7 +102,7 @@ def load_model():
         peft_config = LoraConfig(
             lora_alpha=16,
             lora_dropout=0.1,
-            r=8,
+            r=16,
             bias="none",
             task_type="CAUSAL_LM",
             target_modules="all-linear"
@@ -111,45 +113,49 @@ def load_model():
 
 
 
-def main():
+def main(args):
     
     # Set seed for reproducibility
-    set_seed(seed)
-
+    set_seed(args.seed)
     # model
-    model, tokenizer, peft_config = load_model()
+    model, tokenizer, peft_config = load_model(args)
 
     model.config.use_cache = False
 
     print(f"{model.device = }")
 
-    train_dataset, test_dataset = create_datasets(tokenizer)
+    train_dataset, test_dataset = create_datasets(args,tokenizer)
 
     print(f"{train_dataset[0] = }")
     training_args = DPOConfig(
-        beta=0.1,
+        beta=args.beta,
+        label_smoothing=args.label_smoothing,
+        loss_type="robust",
         label_pad_token_id=tokenizer.pad_token_id,
         padding_value=tokenizer.pad_token,
         max_length=2048,
         max_prompt_length=1024,
         max_target_length=1024,
         precompute_ref_log_probs=True,
-        output_dir=output_dir,
+        output_dir=args.output_dir,
         num_train_epochs=3,
         logging_steps=5,
         log_level="info",
         logging_strategy="steps",
         evaluation_strategy="epoch",
         save_strategy="epoch",
-        learning_rate=1e-4,
+        learning_rate=args.lr,
+        optim="paged_adamw_32bit",
         # optim="adamw_bnb_8bit",
         lr_scheduler_type="cosine",
-        weight_decay=1e-4,
-        warmup_ratio=0.0,
+        # weight_decay=5e-5,
+        # warmup_ratio=0.0,
+        warmup_steps=5,
         max_grad_norm=1.0,
-        per_device_train_batch_size=4,
-        per_device_eval_batch_size=4,
-        gradient_accumulation_steps=2,
+        per_device_train_batch_size=2,
+        per_device_eval_batch_size=2,
+        resume_from_checkpoint=args.resume_from_checkpoint,
+        gradient_accumulation_steps=args.effective_batch_size // 2,
         gradient_checkpointing=True,
         report_to="tensorboard",
         gradient_checkpointing_kwargs={"use_reentrant": True},
@@ -174,7 +180,7 @@ def main():
     trainer.accelerator.print(f"{trainer.model}")
     trainer.model.print_trainable_parameters()
 
-    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+    trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
     trainer.save_model()
 
     if push_to_hub:
@@ -182,8 +188,22 @@ def main():
 
 
 if __name__ == "__main__":
-    print(dataset_name)
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--lr", type=float, default=5e-5, help="Learning rate for training")
+    parser.add_argument("--label_smoothing", type=float, default=0.1, help="Label smoothing for Robust DPO")
+    parser.add_argument("--beta", type=float, default=0.1, help="Beta for DPO")
+    parser.add_argument("--dataset_name", type=str, help="Dataset for training")
+    parser.add_argument("--sample_quantity", type=int, default=None, help="Number of entries to sample")
+    parser.add_argument("--seed", type=int, default=42, help="Seed")
+    parser.add_argument("--model_name", type=str, default="rhysjones/phi-2-orange-v2", help="Base model")
+    parser.add_argument("--resume_from_checkpoint", type=str, default=None, help="Checkpoint to resume training from")
+    parser.add_argument("--output_dir", type=str, help="Directory to output the model")
+    parser.add_argument("--effective_batch_size", type=int, default=32, help="Effective batch size")
+
+    args = parser.parse_args()
+    print(args.dataset_name)
     start = time.time()
-    main()
+    main(args)
     end = time.time()
     print(f"\033[92mTraining took {time.strftime('%H:%M:%S', time.gmtime(end - start))} (hours:minutes:seconds)\033[0m")
