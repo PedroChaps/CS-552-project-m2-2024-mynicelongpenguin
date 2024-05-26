@@ -36,8 +36,8 @@ def dprint(*args, **kwargs):
 # resume_from_checkpoint = None #set to the path of the checkpoint to resume training from
 
 # output_dir = "outputs/chosen_model"
-push_to_hub = False #set True to push the model to the hub at the end of training
-commit_message = None #commit message
+push_to_hub = True #set True to push the model to the hub at the end of training
+commit_message = "First model, trained on 40k examples for 3 epochs" #commit message
 repo_id = "TeachersHateChatbots"
 ##################################################################
 
@@ -142,8 +142,12 @@ def main(args):
         logging_steps=5,
         log_level="info",
         logging_strategy="steps",
-        evaluation_strategy="epoch",
-        save_strategy="epoch",
+        # evaluation_strategy="epoch",
+        evaluation_strategy="steps",
+        eval_steps=500,
+        # save_strategy="epoch",
+        save_strategy="steps",
+        save_steps=500,
         learning_rate=args.lr,
         optim="paged_adamw_32bit",
         # optim="adamw_bnb_8bit",
@@ -153,7 +157,7 @@ def main(args):
         warmup_steps=5,
         max_grad_norm=1.0,
         per_device_train_batch_size=2,
-        per_device_eval_batch_size=2,
+        per_device_eval_batch_size=4,
         resume_from_checkpoint=args.resume_from_checkpoint,
         gradient_accumulation_steps=args.effective_batch_size // 2,
         gradient_checkpointing=True,
