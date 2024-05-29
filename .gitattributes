@@ -1,0 +1,2 @@
+model/models/outputs/** filter=lfs diff=lfs merge=lfs -text
+model/checkpoints/** filter=lfs diff=lfs merge=lfs -text
