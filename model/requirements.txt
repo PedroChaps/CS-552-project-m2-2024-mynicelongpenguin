@@ -1,5 +1,7 @@
-transformers
+numpy
+scikit-learn
 datasets
+transformers
 evaluate
 nltk
 tensorboard
@@ -9,7 +11,5 @@ accelerate
 torch
 bitsandbytes
 peft
-numpy
-scikit-learn
 huggingface-hub
 trl
