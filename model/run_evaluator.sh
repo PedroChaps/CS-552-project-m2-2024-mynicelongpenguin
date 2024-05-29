@@ -1,15 +1,14 @@
 #! /bin/bash -l
-module load gcc python
+module load gcc python cuda
 
 echo "Loading virtualenv..."
 
-source ~/venvs/mnlp2/bin/activate
+source ~/venvs/venv_evaluator/bin/activate
 
 echo "Going to run..."
 
 python evaluator.py
 
 echo "Evaluatior run"
-echo "DONE"
 
 deactivate

@@ -1,6 +1,0 @@
-transformers
-datasets
-evaluate
-peft
-accelerate
-trl
