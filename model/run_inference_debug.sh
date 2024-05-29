@@ -3,7 +3,7 @@ module load gcc python
 
 echo "Loading virtualenv..."
 
-source ~/venvs/test_env/bin/activate
+source ~/venvs/mnlp2/bin/activate
 
 echo "Going to run..."
 

@@ -236,15 +236,6 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
                 Log probabilities of the rejected responses. Shape: (batch_size,)
         """
 
-        #ERROR because tokenizer does not have pad token, so define one
-        #TODO: what should I do?
-        tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-
-        #return if they already in thr batch TODO: see if this is what we want
-        if "chosen_logps" in batch and "rejected_logps" in batch:
-            return batch["chosen_logps"], batch["rejected_logps"]
-
         def get_logprobs_pair(questions: list, answers: list):
             """
             Compute the log probabilities of the answers given the questions.
@@ -255,31 +246,33 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
             Returns:
                 logps (`torch.FloatTensor`): Log probabilities of the answers given the questions.
             """
-            template = "Instruct: <question>\nOutput: "
+            system  = {"role": "system", "content": "You are a helpful EPFL chatbot."}
 
             self.pretrained_model.to(torch.device("cuda"))
 
-            #Replace the <question> tag with the question
-            strings = [template.replace("<question>", question) for question in questions]
+            strings = [tokenizer.apply_chat_template([system, {"role": "user", "content": question}], tokenize=False, add_generation_prompt=True) for question in questions]
             # Get the length of the tokenized prompt
             length_questions = [len(tokenizer.tokenize(string)) for string in strings]
 
             # Add the answers
             strings = [string + answer for string, answer in zip(strings, answers)]
 
-            tokenized_strings = tokenizer(strings, return_tensors="pt", padding=True, truncation=True)
+            #TODO: pad to max_length of the model
+            tokenized_strings = tokenizer(strings, return_tensors="pt", padding="max_length", truncation=True)
             input_ids = tokenized_strings.input_ids
             attention_mask = tokenized_strings.attention_mask
 
             input_ids = input_ids.to(self.pretrained_model.device)
             attention_mask = attention_mask.to(self.pretrained_model.device)
 
+            print(f"{input_ids.shape = }")
             start = time.time()
             with torch.no_grad():
                     logits = self.pretrained_model(input_ids, use_cache=False, attention_mask=attention_mask).logits
 
             end = time.time() 
             print("Time taken to run model inference: ", end - start)
+            print(f"{logits.shape = }")
             
 
             logps = []
@@ -366,34 +359,32 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
         return output_dict
 
     def prediction_step_mcqa(self, batch, tokenizer):
-        """
-        Computes the mcqa prediction of the given question.
+            """
+            Computes the mcqa prediction of the given question.
 
-        Args:
-            batch (`list` of `dict`):
-                A list of dictionaries containing the input mcqa data for the DPO model.
-                The data format is as follows:
-                {
-                    "question": str,
-                    "choices": List[str],
-                    "answer": str,
-                }
-            tokenizer (`PreTrainedTokenizerBase`): The tokenizer used to tokenize the input questions.
-        Returns:
-            output_dict (`dict`): A dictionary containing the model predictions given input questions.
-        """
-        output_dict = {"preds": []}
+            Args:
+                batch (`dict` of `list`):
+                    A dictionary containing the input mcqa data for the DPO model.
+                    The data format is as follows:
+                    {
+                        "question": List[str], each <str> contains the question body and the choices
+                        "answer": List[str], each <str> is a single letter representing the correct answer
+                    }
+                tokenizer (`PreTrainedTokenizerBase`): The tokenizer used to tokenize the input questions.
+            Returns:
+                output_dict (`dict`): A dictionary containing the model predictions given input questions.
+            """
+            output_dict = {"preds": []}
 
-        ########################################################################
-        # TODO: Please implement the prediction step that generates the prediction of the given MCQA question
-        # ======================================================================
-        # You need to return one letter prediction for each question.
-        # ======================================================================
-        raise NotImplementedError
-        ########################################################################
+            ########################################################################
+            # TODO: Please implement the prediction step that generates the prediction of the given MCQA question
+            # ======================================================================
+            # You need to return one letter prediction for each question.
+            # ======================================================================
+            raise NotImplementedError
+            ########################################################################
 
-        return output_dict
-
+            return output_dict
 
 
 
