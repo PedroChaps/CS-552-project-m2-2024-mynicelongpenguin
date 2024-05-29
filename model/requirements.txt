@@ -9,3 +9,7 @@ accelerate
 torch
 bitsandbytes
 peft
+numpy
+scikit-learn
+huggingface-hub
+trl
