@@ -258,22 +258,30 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
             strings = [string + answer for string, answer in zip(strings, answers)]
 
             #TODO: pad to max_length of the model
-            tokenized_strings = tokenizer(strings, return_tensors="pt", padding="max_length", truncation=True)
+            tokenized_strings = tokenizer(strings, return_tensors="pt", padding=True, truncation=True, max_length=2048, add_special_tokens=True)
+
             input_ids = tokenized_strings.input_ids
             attention_mask = tokenized_strings.attention_mask
 
             input_ids = input_ids.to(self.pretrained_model.device)
             attention_mask = attention_mask.to(self.pretrained_model.device)
 
-            print(f"{input_ids.shape = }")
+            #Make sure there are no memory errors
+            max_batch_size = 8
+            logits = []
             start = time.time()
-            with torch.no_grad():
-                    logits = self.pretrained_model(input_ids, use_cache=False, attention_mask=attention_mask).logits
+            for i in range(0, len(input_ids), max_batch_size):
+                end_idx = min(len(input_ids), i + max_batch_size)
+                with torch.no_grad():
+                        logits.append(self.pretrained_model(input_ids[i : end_idx], use_cache=False, attention_mask=attention_mask[i: end_idx]).logits)
 
             end = time.time() 
             print("Time taken to run model inference: ", end - start)
-            print(f"{logits.shape = }")
-            
+
+            if len(logits) >  1:
+                logits = torch.cat(logits, dim=0)
+            else:
+                logits = logits[0]
 
             logps = []
             for i, logit in enumerate(logits):
@@ -281,7 +289,9 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
                 # get the input tokens and logits of the answer (not the whole prompt + answer)
                 needed_input = input_ids[i][length_questions[i]:]
                 needed_logits = logit[length_questions[i]:]
-                needed_attention_mask = attention_mask[i][length_questions[i]:]
+
+                #calculate a loss mask to use for the log probs
+                loss_mask = needed_input != tokenizer.pad_token_id
 
                 #calculate log softmax in the dimension of vocab_size
                 needed_logits = F.log_softmax(needed_logits, dim=1)
@@ -289,11 +299,8 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
                 #use the token_ids to choose the log prob to choose from all of the logits
                 selected_logits = torch.gather(needed_logits, dim=1, index=needed_input.unsqueeze(1)).squeeze(1)
 
-                #put to 0 all of the logits where attention_mask is 1 (pad token)
-                masked_logits = torch.where(needed_attention_mask == 1, torch.tensor(0.0).to(self.pretrained_model.device), selected_logits)
-                
                 #sum the log probs
-                sum_logits_answer = torch.sum(masked_logits).item()
+                sum_logits_answer = (selected_logits * loss_mask).sum().item()
 
                 logps.append(sum_logits_answer) 
             
