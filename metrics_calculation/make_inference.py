@@ -62,9 +62,9 @@ for model_name in model_names:
     
     print("\x1b[2;30;42m" + f"Making inference with model {model_name}{bcolors.ENDC}" + "\x1b[0m")
     
-    # TODO P which type to use? "question-answering" doesn't work
+    # TODO P which type to use? "question-answering" doesn't work. There is a way to print the model's default
     # TODO P using a pipeline might be a problem because we need to somehow associate the "chat template" to the model (or I can just pass the tokenizer)
-    pipe = pipeline("conversational", model_name, device=device)   
+    # pipe = pipeline("conversational", model_name, device=device)   
     
     # ----------------------- Try 1: Naive, iterating one by one -----------------------------------
     # for prompt in tqdm(prompts):
@@ -115,9 +115,9 @@ for model_name in model_names:
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenized_msgs = tokenizer.apply_chat_template(formatted_prompts, padding=True)
     
-    # data_dict = {key: val.tolist() for key, val in tokenized_msgs.items()}
-    dataset = Dataset.from_list(tokenized_msgs)
-    # Error message here /\
+    data_dict = [{"key": el} for el in tokenized_msgs]
+    dataset = Dataset.from_dict(data_dict)
+    
     print(dataset)
     print(dataset[0])
     ...
