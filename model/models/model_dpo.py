@@ -267,16 +267,16 @@ class AutoDPOModelForCausalLM(PreTrainedModelWrapper):
             attention_mask = attention_mask.to(self.pretrained_model.device)
 
             #Make sure there are no memory errors
-            max_batch_size = 8
+            max_batch_size = 4
             logits = []
-            start = time.time()
+            # start = time.time()
             for i in range(0, len(input_ids), max_batch_size):
                 end_idx = min(len(input_ids), i + max_batch_size)
                 with torch.no_grad():
                         logits.append(self.pretrained_model(input_ids[i : end_idx], use_cache=False, attention_mask=attention_mask[i: end_idx]).logits)
 
-            end = time.time() 
-            print("Time taken to run model inference: ", end - start)
+            # end = time.time() 
+            # print("Time taken to run model inference: ", end - start)
 
             if len(logits) >  1:
                 logits = torch.cat(logits, dim=0)
